@@ -28,12 +28,36 @@ make clean   # Remove build artifacts
 ## File Structure
 
 ```
-main.go         — HTTP server, handler, model routing logic
+main.go         — HTTP server, handler, model routing, daemon CLI subcommands
 config.go       — JSON config loader with ${ENV} interpolation
 transformer.go  — Anthropic ↔ OpenAI format conversion
 types.go        — Anthropic + OpenAI type definitions
 sse.go          — Streaming SSE transformation
+go.mod          — Go 1.23, +1 dep: github.com/kardianos/service
 ```
+
+## Daemon & Service Management
+
+**Library:** `github.com/kardianos/service` — cross-platform daemon (Linux systemd, macOS launchd, Windows SCM).
+
+**CLI subcommands:**
+
+| Command | Description |
+|---------|-------------|
+| `ocgo2cli start [-c config]` | Start as daemon (default) |
+| `ocgo2cli stop` | Stop daemon |
+| `ocgo2cli restart [-c config]` | Restart |
+| `ocgo2cli status` | Query status |
+| `ocgo2cli run [-c config]` | Foreground (debug / service manager) |
+| `ocgo2cli install` | Install as user-level service |
+| `ocgo2cli uninstall` | Remove service |
+| `ocgo2cli version` | Print version |
+
+**program struct** implements `service.Interface`:
+- `Start()`: Creates `http.Server`, runs in goroutine, signals start via channel
+- `Stop()`: Calls `srv.Shutdown(context.Background())` for graceful shutdown
+
+**Install level:** User (no sudo needed). `UserService: true` in service config.
 
 ## Model Routing
 
@@ -97,5 +121,4 @@ This project's transformer code references [oc-go-cc](https://github.com/nousres
 
 ```
 feat(scope): description
-
 ```

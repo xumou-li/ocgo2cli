@@ -2,43 +2,184 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
+
+	"github.com/kardianos/service"
 )
+
+// Version is the current version of ocgo2cli.
+const Version = "1.0.0"
 
 var cfg *Config
 
-func main() {
-	configPath, err := DefaultConfigPath()
-	if err != nil {
-		log.Fatalf("config path: %v", err)
+// program implements service.Interface for daemon management.
+type program struct {
+	srv           *http.Server
+	serverStarted chan error // receives result of ListenAndServe
+}
+
+func (p *program) Start(s service.Service) error {
+	// Start should not block. Run server in a goroutine.
+	log.Printf("ocgo2cli daemon starting on %s", cfg.Listen)
+	p.serverStarted = make(chan error, 1)
+	go p.runServer()
+	// Wait briefly for the server to start or fail.
+	select {
+	case err := <-p.serverStarted:
+		if err != nil {
+			return err
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
+func (p *program) runServer() {
+	p.srv = &http.Server{
+		Addr:    cfg.Listen,
+		Handler: newServeMux(),
 	}
 
-	if err := SaveDefaultConfig(configPath); err != nil {
-		log.Printf("Warning: could not save default config: %v", err)
+	log.Printf("ocgo2cli listening on %s", cfg.Listen)
+	// Signal that the server has started (non-blocking).
+	select {
+	case p.serverStarted <- nil:
+	default:
 	}
+	if err := p.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Printf("server error: %v", err)
+		select {
+		case p.serverStarted <- err:
+		default:
+		}
+	}
+}
 
+func (p *program) Stop(s service.Service) error {
+	log.Println("ocgo2cli shutting down...")
+	if p.srv != nil {
+		return p.srv.Shutdown(context.Background())
+	}
+	return nil
+}
+
+// newServeMux creates a configured ServeMux with all routes registered.
+func newServeMux() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/messages", handleMessages)
+	mux.HandleFunc("/health", handleHealth)
+	return mux
+}
+
+// runForeground starts the HTTP server in the foreground (for debug/manual use).
+func runForeground() {
+	addr := cfg.Listen
+	log.Printf("ocgo2cli starting on %s (foreground)", addr)
+	if err := http.ListenAndServe(addr, newServeMux()); err != nil {
+		log.Fatalf("server: %v", err)
+	}
+}
+
+// loadConfigOrDie loads configuration, calling log.Fatalf on failure.
+func loadConfigOrDie(configPath string) {
+	var err error
 	cfg, err = LoadConfig(configPath)
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}
-
 	if err := cfg.Validate(); err != nil {
-		log.Printf("Warning: config validation failed: %v", err)
+		log.Fatalf("config validation failed: %v", err)
+	}
+}
+
+func main() {
+	// Define our flags before the service framework takes over.
+	configPath := flag.String("c", "", "Config file path (default: ~/.config/ocgo2cli/config.json)")
+	flag.StringVar(configPath, "config", "", "Config file path (default: ~/.config/ocgo2cli/config.json)")
+
+	// Parse early so we can check for "version"/"run" before service framework.
+	// flag.Parse() stops at the first non-flag argument, leaving the command
+	// in flag.Args() for inspection.
+	flag.Parse()
+
+	// Resolve config path.
+	resolvedPath := *configPath
+	if resolvedPath == "" {
+		var err error
+		resolvedPath, err = DefaultConfigPath()
+		if err != nil {
+			log.Fatalf("config path: %v", err)
+		}
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/messages", handleMessages)
-	mux.HandleFunc("/health", handleHealth)
+	// Ensure default config exists.
+	if err := SaveDefaultConfig(resolvedPath); err != nil {
+		log.Printf("Warning: could not save default config: %v", err)
+	}
 
-	addr := cfg.Listen
-	log.Printf("ocgo2cli starting on %s", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Fatalf("server: %v", err)
+	// Load config globally.
+	loadConfigOrDie(resolvedPath)
+
+	// Determine the command (first non-flag arg).
+	args := flag.Args()
+	cmd := ""
+	if len(args) > 0 {
+		cmd = args[0]
+	}
+
+	// Handle commands that don't need the service framework.
+	switch cmd {
+	case "version":
+		fmt.Printf("ocgo2cli version %s\n", Version)
+		os.Exit(0)
+	case "run":
+		runForeground()
+		return
+	}
+
+	// Build the service configuration.
+	svcConfig := &service.Config{
+		Name:        "ocgo2cli",
+		DisplayName: "ocgo2cli",
+		Description: "OpenCode Go to Claude CLI proxy",
+		Arguments:   []string{"-c", resolvedPath},
+		Option: service.KeyValue{
+			"UserService": true, // install at user level, no sudo required
+		},
+	}
+
+	prg := &program{}
+	s, err := service.New(prg, svcConfig)
+	if err != nil {
+		log.Fatalf("create service: %v", err)
+	}
+
+	// Handle service control commands.
+	if cmd != "" {
+		err = service.Control(s, cmd)
+		if err != nil {
+			log.Fatalf("%s: %v", cmd, err)
+		}
+		if cmd == "install" {
+			fmt.Printf("Service installed (user level). Config: %s\nRun 'ocgo2cli start' to begin.\n", resolvedPath)
+		}
+		return
+	}
+
+	// No command given → run as a daemon (called by service manager).
+	log.Printf("ocgo2cli daemon starting (config: %s)", resolvedPath)
+	err = s.Run()
+	if err != nil {
+		log.Fatalf("run service: %v", err)
 	}
 }
 
