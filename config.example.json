@@ -1,0 +1,30 @@
+{
+  "listen": "127.0.0.1:3457",
+  "opencode_base_url": "https://opencode.ai/zen/go/v1/chat/completions",
+  "opencode_anthropic_base_url": "https://opencode.ai/zen/go/v1/messages",
+  "api_key": "${OC_API_KEY}",
+  "models": {
+    "claude-sonnet-4-20250514": {
+      "model_id": "deepseek-v4-pro",
+      "temperature": 0.7,
+      "max_tokens": 8192,
+      "reasoning_effort": "max",
+      "thinking": {"type": "enabled"}
+    },
+    "claude-opus-4-6-20250514": {
+      "model_id": "kimi-k2.6",
+      "temperature": 0.7,
+      "max_tokens": 8192
+    },
+    "claude-haiku-4-5-20250514": {
+      "model_id": "qwen3.6-plus",
+      "temperature": 0.5,
+      "max_tokens": 2048
+    },
+    "claude-opus-4-5-20250514": {
+      "model_id": "minimax-m2.5",
+      "temperature": 0.7,
+      "max_tokens": 16384
+    }
+  }
+}
