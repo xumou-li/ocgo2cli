@@ -28,11 +28,12 @@ type program struct {
 }
 
 func (p *program) Start(s service.Service) error {
-	// Start should not block. Run server in a goroutine.
 	log.Printf("ocgo2cli daemon starting on %s", cfg.Listen)
+	if err := writePID(); err != nil {
+		log.Printf("Warning: could not write PID file: %v", err)
+	}
 	p.serverStarted = make(chan error, 1)
 	go p.runServer()
-	// Wait briefly for the server to start or fail.
 	select {
 	case err := <-p.serverStarted:
 		if err != nil {
@@ -142,7 +143,23 @@ func main() {
 	case "version":
 		fmt.Printf("ocgo2cli version %s\n", Version)
 		os.Exit(0)
+	case "status":
+		pid, err := readPID()
+		if err != nil {
+			log.Fatalf("status: %v", err)
+		}
+		if isProcessRunning(pid) {
+			fmt.Printf("ocgo2cli is running (PID: %d)\n", pid)
+		} else {
+			fmt.Printf("ocgo2cli PID file exists but process %d is not running\n", pid)
+			removePID()
+		}
+		os.Exit(0)
 	case "run":
+		if err := writePID(); err != nil {
+			log.Printf("Warning: could not write PID file: %v", err)
+		}
+		defer removePID()
 		runForeground()
 		return
 	}
