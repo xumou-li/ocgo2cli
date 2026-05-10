@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // Config holds the full application configuration.
@@ -124,7 +125,44 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("model_id is required for %s", claudeModel)
 		}
 	}
+
+	// Check for overlapping model keys: no key may be a substring of another.
+	for keyA := range c.Models {
+		for keyB := range c.Models {
+			if keyA == keyB {
+				continue
+			}
+			if strings.Contains(strings.ToLower(keyB), strings.ToLower(keyA)) {
+				return fmt.Errorf("model key %q is a substring of %q — keyword mapping requires non-overlapping keys", keyA, keyB)
+			}
+		}
+	}
+
 	return nil
+}
+
+// matchModel performs case-insensitive keyword matching of modelName against
+// configured model keys. When multiple keys match, the longest key (in UTF-8
+// characters) is selected.
+func (c *Config) matchModel(modelName string) (ModelConfig, string, bool) {
+	var bestKey string
+	var bestConfig ModelConfig
+	modelNameLower := strings.ToLower(modelName)
+
+	for key, mc := range c.Models {
+		keyLower := strings.ToLower(key)
+		if strings.Contains(modelNameLower, keyLower) {
+			if utf8.RuneCountInString(key) > utf8.RuneCountInString(bestKey) {
+				bestKey = key
+				bestConfig = mc
+			}
+		}
+	}
+
+	if bestKey == "" {
+		return ModelConfig{}, "", false
+	}
+	return bestConfig, bestKey, true
 }
 
 // resolveEnv is a helper to unwrap ${VAR} when printing configs.
