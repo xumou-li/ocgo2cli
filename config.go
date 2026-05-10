@@ -15,6 +15,8 @@ type Config struct {
 	OpenCodeBaseURL        string                `json:"opencode_base_url"`
 	OpenCodeAnthropicBaseURL string              `json:"opencode_anthropic_base_url"`
 	APIKey                 string                `json:"api_key"`
+	RequestTimeout         int                   `json:"request_timeout_seconds"`
+	MaxIdleConns           int                   `json:"max_idle_connections"`
 	Models                 map[string]ModelConfig `json:"models"`
 }
 
@@ -34,6 +36,8 @@ func DefaultConfig() *Config {
 		OpenCodeBaseURL:          "https://opencode.ai/zen/go/v1/chat/completions",
 		OpenCodeAnthropicBaseURL: "https://opencode.ai/zen/go/v1/messages",
 		APIKey:                   "",
+		RequestTimeout:           300,
+		MaxIdleConns:             20,
 		Models:                   make(map[string]ModelConfig),
 	}
 }
