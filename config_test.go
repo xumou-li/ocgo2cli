@@ -217,3 +217,191 @@ func TestResolveEnv(t *testing.T) {
 		t.Errorf("expected plain-value, got %s", got)
 	}
 }
+
+// --- matchModel tests ---
+
+func TestMatchModel(t *testing.T) {
+	t.Run("正常单命中", func(t *testing.T) {
+		cfg := &Config{
+			Models: map[string]ModelConfig{
+				"sonnet": {ModelID: "deepseek-v4"},
+			},
+		}
+		mc, key, ok := cfg.matchModel("claude-sonnet-4-20250514")
+		if !ok {
+			t.Fatal("expected match")
+		}
+		if key != "sonnet" {
+			t.Errorf("expected key 'sonnet', got %q", key)
+		}
+		if mc.ModelID != "deepseek-v4" {
+			t.Errorf("expected model_id 'deepseek-v4', got %q", mc.ModelID)
+		}
+	})
+
+	t.Run("最长匹配", func(t *testing.T) {
+		cfg := &Config{
+			Models: map[string]ModelConfig{
+				"claude":        {ModelID: "model-a"},
+				"claude-sonnet": {ModelID: "model-b"},
+			},
+		}
+		mc, key, ok := cfg.matchModel("claude-sonnet-4")
+		if !ok {
+			t.Fatal("expected match")
+		}
+		if key != "claude-sonnet" {
+			t.Errorf("expected key 'claude-sonnet', got %q", key)
+		}
+		if mc.ModelID != "model-b" {
+			t.Errorf("expected model_id 'model-b', got %q", mc.ModelID)
+		}
+	})
+
+	t.Run("大小写不敏感", func(t *testing.T) {
+		cfg := &Config{
+			Models: map[string]ModelConfig{
+				"Sonnet": {ModelID: "deepseek-v4"},
+			},
+		}
+		_, key, ok := cfg.matchModel("claude-sonnet-4")
+		if !ok {
+			t.Fatal("expected match")
+		}
+		if key != "Sonnet" {
+			t.Errorf("expected key 'Sonnet', got %q", key)
+		}
+	})
+
+	t.Run("无匹配", func(t *testing.T) {
+		cfg := &Config{
+			Models: map[string]ModelConfig{
+				"sonnet": {ModelID: "deepseek-v4"},
+			},
+		}
+		_, _, ok := cfg.matchModel("claude-opus-4")
+		if ok {
+			t.Error("expected no match")
+		}
+	})
+
+	t.Run("空 config", func(t *testing.T) {
+		cfg := &Config{
+			Models: map[string]ModelConfig{},
+		}
+		_, _, ok := cfg.matchModel("claude-sonnet-4")
+		if ok {
+			t.Error("expected no match for empty config")
+		}
+	})
+
+	t.Run("完全相同的 key 和 modelName", func(t *testing.T) {
+		cfg := &Config{
+			Models: map[string]ModelConfig{
+				"claude-sonnet-4": {ModelID: "deepseek-v4"},
+			},
+		}
+		_, key, ok := cfg.matchModel("claude-sonnet-4")
+		if !ok {
+			t.Fatal("expected match for exact equality")
+		}
+		if key != "claude-sonnet-4" {
+			t.Errorf("expected key 'claude-sonnet-4', got %q", key)
+		}
+	})
+
+	t.Run("UTF-8 字符数", func(t *testing.T) {
+		cfg := &Config{
+			Models: map[string]ModelConfig{
+				"hello":    {ModelID: "model-a"},
+				"你好世界":     {ModelID: "model-b"},
+				"你好":        {ModelID: "model-c"},
+			},
+		}
+		mc, key, ok := cfg.matchModel("prefix-你好世界-suffix")
+		if !ok {
+			t.Fatal("expected match")
+		}
+		if key != "你好世界" {
+			t.Errorf("expected key '你好世界' (longest rune count), got %q", key)
+		}
+		if mc.ModelID != "model-b" {
+			t.Errorf("expected model_id 'model-b', got %q", mc.ModelID)
+		}
+	})
+
+	t.Run("多个命中取最长", func(t *testing.T) {
+		cfg := &Config{
+			Models: map[string]ModelConfig{
+				"son":       {ModelID: "model-a"},
+				"sonnet":    {ModelID: "model-b"},
+				"sonnet-4":  {ModelID: "model-c"},
+			},
+		}
+		mc, key, ok := cfg.matchModel("claude-sonnet-4-2025")
+		if !ok {
+			t.Fatal("expected match")
+		}
+		if key != "sonnet-4" {
+			t.Errorf("expected key 'sonnet-4' (longest), got %q", key)
+		}
+		if mc.ModelID != "model-c" {
+			t.Errorf("expected model_id 'model-c', got %q", mc.ModelID)
+		}
+	})
+}
+
+// --- Validate sub-match rejection tests ---
+
+func TestValidateKeywordMapping(t *testing.T) {
+	t.Run("子串冲突", func(t *testing.T) {
+		cfg := &Config{
+			APIKey: "sk-key",
+			Models: map[string]ModelConfig{
+				"son":    {ModelID: "model-a"},
+				"sonnet": {ModelID: "model-b"},
+			},
+		}
+		if err := cfg.Validate(); err == nil {
+			t.Error("expected error for overlapping keys (son is substring of sonnet)")
+		}
+	})
+
+	t.Run("大小写不敏感冲突", func(t *testing.T) {
+		cfg := &Config{
+			APIKey: "sk-key",
+			Models: map[string]ModelConfig{
+				"Sonnet": {ModelID: "model-a"},
+				"sonnet": {ModelID: "model-b"},
+			},
+		}
+		if err := cfg.Validate(); err == nil {
+			t.Error("expected error for case-insensitive duplicate")
+		}
+	})
+
+	t.Run("无冲突", func(t *testing.T) {
+		cfg := &Config{
+			APIKey: "sk-key",
+			Models: map[string]ModelConfig{
+				"sonnet": {ModelID: "model-a"},
+				"opus":   {ModelID: "model-b"},
+			},
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("单个 key", func(t *testing.T) {
+		cfg := &Config{
+			APIKey: "sk-key",
+			Models: map[string]ModelConfig{
+				"sonnet": {ModelID: "model-a"},
+			},
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("unexpected error for single key: %v", err)
+		}
+	})
+}
