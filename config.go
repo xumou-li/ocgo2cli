@@ -22,11 +22,12 @@ type Config struct {
 
 // ModelConfig maps a Claude model name to a backend model and its parameters.
 type ModelConfig struct {
-	ModelID        string          `json:"model_id"`
-	Temperature    *float64        `json:"temperature,omitempty"`
-	MaxTokens      *int            `json:"max_tokens,omitempty"`
-	ReasoningEffort *string        `json:"reasoning_effort,omitempty"`
-	Thinking       json.RawMessage `json:"thinking,omitempty"`
+	ModelID              string          `json:"model_id"`
+	Temperature          *float64        `json:"temperature,omitempty"`
+	MaxTokens            *int            `json:"max_tokens,omitempty"`
+	ReasoningEffort      *string         `json:"reasoning_effort,omitempty"`
+	Thinking             json.RawMessage `json:"thinking,omitempty"`
+	ForceThinkingDisable *bool           `json:"force_thinking_disable,omitempty"`
 }
 
 // DefaultConfig returns a sensible default configuration.

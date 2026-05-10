@@ -100,11 +100,18 @@ func TransformRequest(anthropicReq *MessageRequest, model ModelConfig) (*ChatCom
 	}
 
 	// Handle thinking/reasoning_effort
-	if hasThinkingInHistory {
+	if model.ForceThinkingDisable != nil && *model.ForceThinkingDisable {
+		req.Thinking = json.RawMessage(`{"type":"disabled"}`)
+	} else if hasThinkingInHistory {
 		req.Thinking = json.RawMessage(`{"type":"enabled"}`)
 		if model.ReasoningEffort != nil {
 			req.ReasoningEffort = model.ReasoningEffort
 		}
+	} else if model.Thinking != nil || model.ReasoningEffort != nil {
+		// Model config wants thinking but no thinking in history —
+		// must send disabled or DeepSeek/Qwen may reject.
+		req.Thinking = json.RawMessage(`{"type":"disabled"}`)
+	}
 	} else if model.Thinking != nil || model.ReasoningEffort != nil {
 		// Model config wants thinking but no thinking in history —
 		// must send disabled or DeepSeek/Qwen may reject.
