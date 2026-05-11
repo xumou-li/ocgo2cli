@@ -322,8 +322,8 @@ func handleMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Lookup model config
-	modelConfig, ok := cfg.Models[anthropicReq.Model]
+	// Lookup model config via keyword matching
+	modelConfig, _, ok := cfg.matchModel(anthropicReq.Model)
 	if !ok {
 		writeAnthropicError(w, http.StatusBadRequest,
 			fmt.Sprintf("unknown model: %s", anthropicReq.Model))

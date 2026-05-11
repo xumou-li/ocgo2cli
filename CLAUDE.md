@@ -63,12 +63,14 @@ go.mod          — Go 1.23, +1 dep: github.com/kardianos/service
 
 ```
 Request arrives POST /v1/messages {"model": "claude-sonnet-4-20250514", ...}
-  → Lookup config.models["claude-sonnet-4-20250514"] → ModelConfig
+  → Lookup via keyword substring matching (longest match, case-insensitive) → ModelConfig
   → IsAnthropicModel(model_id)?
     YES → replace model in raw body → POST /v1/messages (Anthropic format, pass-through)
     NO  → transform Anthropic→OpenAI → POST /v1/chat/completions → transform back
   → Return response with original Claude model name in "model" field
 ```
+
+**Matching rules:** Each configured model key is checked as a case-insensitive substring of the requested model name. When multiple keys match, the longest (by UTF-8 character count) is selected. Config validation rejects overlapping keys (e.g., both `"son"` and `"sonnet"`).
 
 ## Anthropic-native model detection (hardcoded)
 
