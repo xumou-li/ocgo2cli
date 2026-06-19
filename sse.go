@@ -277,7 +277,7 @@ func (s *streamState) emitToolCallDelta(tc ToolCall) error {
 			Index: &anthIdx,
 			ContentBlock: &ContentBlock{
 				Type: "tool_use",
-				ID:   tc.ID,
+				ID:   fixToolUseID(tc.ID),
 				Name: tc.Function.Name,
 			},
 		})

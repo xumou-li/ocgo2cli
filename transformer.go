@@ -296,7 +296,7 @@ func TransformResponse(openaiResp *ChatCompletionResponse, originalModel string)
 		input := json.RawMessage(tc.Function.Arguments)
 		content = append(content, ContentBlock{
 			Type:  "tool_use",
-			ID:    tc.ID,
+			ID:    fixToolUseID(tc.ID),
 			Name:  tc.Function.Name,
 			Input: input,
 		})
@@ -337,6 +337,16 @@ func mapFinishReason(finishReason string) string {
 		}
 		return finishReason
 	}
+}
+
+// fixToolUseID rewrites OpenAI-generated tool call IDs (call_00_...) to
+// Anthropic-compatible format (toolu_01_...). Claude Code specifically
+// validates the toolu_ prefix and refuses to execute tools with unknown IDs.
+func fixToolUseID(id string) string {
+	if strings.HasPrefix(id, "call_00_") {
+		return "toolu_01_" + id[8:]
+	}
+	return id
 }
 
 // TransformErrorResponse creates an Anthropic-formatted error response.
