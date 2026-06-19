@@ -38,7 +38,7 @@ func DefaultConfig() *Config {
 		OpenCodeBaseURL:          "https://opencode.ai/zen/go/v1/chat/completions",
 		OpenCodeAnthropicBaseURL: "https://opencode.ai/zen/go/v1/messages",
 		APIKey:                   "",
-		RequestTimeout:           300,
+		RequestTimeout:           600,
 		MaxIdleConns:             20,
 		Models:                   make(map[string]ModelConfig),
 	}

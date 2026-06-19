@@ -10,14 +10,14 @@ var httpClient *http.Client
 func initHTTPClient() {
 	if cfg == nil {
 		httpClient = &http.Client{
-			Timeout: 300 * time.Second,
+			Timeout: 600 * time.Second,
 		}
 		return
 	}
 
 	timeout := cfg.RequestTimeout
 	if timeout <= 0 {
-		timeout = 300
+		timeout = 600
 	}
 
 	httpClient = &http.Client{
@@ -26,6 +26,7 @@ func initHTTPClient() {
 			MaxIdleConns:        cfg.MaxIdleConns,
 			IdleConnTimeout:     90 * time.Second,
 			DisableCompression:  false,
+			ResponseHeaderTimeout: 120 * time.Second,
 		},
 	}
 }
