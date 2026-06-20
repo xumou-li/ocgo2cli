@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -277,8 +276,6 @@ func (s *streamState) emitToolCallDelta(tc ToolCall) error {
 		s.toolIndices[tc.Index] = anthIdx
 
 		fixedID := fixToolUseID(tc.ID)
-		log.Printf("[stream] tool_use block_start: upstream=%s -> fixed=%s name=%s",
-			tc.ID, fixedID, tc.Function.Name)
 
 		s.writeEvent(MessageEvent{
 			Type: "content_block_start",

@@ -340,9 +340,8 @@ func mapFinishReason(finishReason string) string {
 }
 
 // fixToolUseID rewrites OpenAI-generated tool call IDs to Anthropic-compatible
-// format (toolu_01_...). Claude Code specifically validates the toolu_ prefix
-// and refuses to execute tools with unrecognized IDs.
-// Handles multiple ID formats: call_00_xxx, call_xxx, chatcmpl-tool-xxx, etc.
+// format (toolu_01_...). Claude Code validates the toolu_ prefix and refuses
+// to execute tools with unrecognized IDs.
 func fixToolUseID(id string) string {
 	if strings.HasPrefix(id, "toolu_") {
 		return id // already compatible
@@ -353,7 +352,13 @@ func fixToolUseID(id string) string {
 		rest = strings.TrimPrefix(rest, "00_")
 		return "toolu_01_" + rest
 	}
-	// Unknown format — add toolu_ prefix
+	// Unknown format — strip any known non-toolu prefix, then add toolu_01_
+	prefixes := []string{"chatcmpl-tool-", "chatcmpl-", "tool-"}
+	for _, p := range prefixes {
+		if strings.HasPrefix(id, p) {
+			return "toolu_01_" + strings.TrimPrefix(id, p)
+		}
+	}
 	return "toolu_01_" + id
 }
 

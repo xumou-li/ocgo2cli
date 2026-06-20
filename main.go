@@ -466,8 +466,6 @@ func handleOpenAIModel(w http.ResponseWriter, r *http.Request, anthropicReq *Mes
 	}
 
 	if isStream {
-		log.Printf("[stream] proxying %d-tool stream for model %s -> %s",
-			len(anthropicReq.Tools), anthropicReq.Model, modelConfig.ModelID)
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
@@ -495,24 +493,10 @@ func handleOpenAIModel(w http.ResponseWriter, r *http.Request, anthropicReq *Mes
 			return
 		}
 
-		// Debug: log upstream tool call IDs
-		for _, choice := range openaiResp.Choices {
-			for _, tc := range choice.Message.ToolCalls {
-				log.Printf("[non-stream] upstream tool_call id=%s name=%s", tc.ID, tc.Function.Name)
-			}
-		}
-
 		anthropicResp, err := TransformResponse(&openaiResp, anthropicReq.Model)
 		if err != nil {
 			writeAnthropicError(w, http.StatusInternalServerError, fmt.Sprintf("transform response: %v", err))
 			return
-		}
-
-		// Debug: log transformed tool_use IDs
-		for _, block := range anthropicResp.Content {
-			if block.Type == "tool_use" {
-				log.Printf("[non-stream] transformed tool_use id=%s name=%s", block.ID, block.Name)
-			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
