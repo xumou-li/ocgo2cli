@@ -21,7 +21,8 @@ type streamState struct {
 	msgID         string // shared message ID for all events
 
 	blockIndex  int      // next content block index to assign
-	openBlocks  []string // types of currently open blocks
+	openBlocks  []int    // content block indices currently open
+	openTypes   []string // types of currently open blocks (parallel array)
 	toolIndices map[int]int // OpenAI tool_call index → Anthropic content block index
 
 	hasStarted  bool // whether message_start has been sent
@@ -207,11 +208,12 @@ func (s *streamState) emitThinkingDelta(text string) error {
 				Thinking: "",
 			},
 		})
-		s.openBlocks = append(s.openBlocks, "thinking")
+		s.openBlocks = append(s.openBlocks, idx)
+		s.openTypes = append(s.openTypes, "thinking")
 		s.currentType = "thinking"
 	}
 
-	blockIdx := len(s.openBlocks) - 1
+	blockIdx := s.openBlocks[len(s.openBlocks)-1]
 	s.writeEvent(MessageEvent{
 		Type: "content_block_delta",
 		Index: &blockIdx,
@@ -241,11 +243,12 @@ func (s *streamState) emitTextDelta(text string) error {
 				Text: "",
 			},
 		})
-		s.openBlocks = append(s.openBlocks, "text")
+		s.openBlocks = append(s.openBlocks, idx)
+		s.openTypes = append(s.openTypes, "text")
 		s.currentType = "text"
 	}
 
-	blockIdx := len(s.openBlocks) - 1
+	blockIdx := s.openBlocks[len(s.openBlocks)-1]
 	s.writeEvent(MessageEvent{
 		Type: "content_block_delta",
 		Index: &blockIdx,
@@ -286,7 +289,8 @@ func (s *streamState) emitToolCallDelta(tc ToolCall) error {
 				Name: tc.Function.Name,
 			},
 		})
-		s.openBlocks = append(s.openBlocks, "tool_use")
+		s.openBlocks = append(s.openBlocks, anthIdx)
+		s.openTypes = append(s.openTypes, "tool_use")
 		s.currentType = "tool_use"
 	}
 
@@ -308,15 +312,16 @@ func (s *streamState) closeCurrentBlock() {
 	if len(s.openBlocks) == 0 {
 		return
 	}
-	idx := len(s.openBlocks) - 1
+	idx := s.openBlocks[len(s.openBlocks)-1]
 	s.writeEvent(MessageEvent{
 		Type: "content_block_stop",
 		Index: &idx,
 	})
 	s.openBlocks = s.openBlocks[:len(s.openBlocks)-1]
+	s.openTypes = s.openTypes[:len(s.openTypes)-1]
 	s.currentType = ""
-	if len(s.openBlocks) > 0 {
-		s.currentType = s.openBlocks[len(s.openBlocks)-1]
+	if len(s.openTypes) > 0 {
+		s.currentType = s.openTypes[len(s.openTypes)-1]
 	}
 }
 
